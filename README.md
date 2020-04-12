@@ -6,6 +6,14 @@ The purpose is to bundle content together into the binary executable for easier 
 
 This module contains a package called vfs that is referenced within application code when interacting with the virtual file system. You should never have to interact with this package directly as all references to it will be part of the generated code that essence creates when building the virtual file system code.
 
+## Installation
+
+Install the binary as any other golang application:
+
+    go install github.com/acepukas/essence
+
+After which the `essence` binary will be on your `$GOPATH`.
+
 ## Usage
 
 You can place code generation directives in your application code. For example:
