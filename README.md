@@ -20,7 +20,7 @@ You can place code generation directives in your application code. For example:
 
     //go:generate essence -package-name=static_vfs -src-dir=./static
 
-This directive will call the essence binary and generate the necessary code when the web application binary executable is built.
+When static content changes you must rerun the `go generate` command each time.
 
 Within your application you can then import the generated package (`static_vfs` in this example):
 
