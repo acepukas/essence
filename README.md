@@ -18,9 +18,29 @@ After which the `essence` binary will be on your `$GOPATH`.
 
 You can place code generation directives in your application code. For example:
 
-    //go:generate essence -package-name=assets_vfs -src-dir=./assets
+    //go:generate essence -package-name=static_vfs -src-dir=./static
 
 This directive will call the essence binary and generate the necessary code when the web application binary executable is built.
+
+Within your application you can then import the generated package (`static_vfs` in this example):
+
+    import (
+
+      ...
+
+      vfs "github.com/acepukas/bookmarks/static_vfs"
+
+    )
+
+Then refer to the virtual file system with
+
+    vfs.VFS
+
+    ...
+
+    fileServer := http.FileServer(vfs.VFS)
+
+    ...
 
 When building the web application binary you can specify on the command line the "dev" tag to use the on disk file system while in development:
 
