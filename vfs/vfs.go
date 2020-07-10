@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -58,6 +59,8 @@ func (v *VFS) Open(filename string) (http.File, error) {
 
 	v.mu.RLock()
 	defer v.mu.RUnlock()
+
+	filename = filepath.Clean(filename)
 
 	file := breadthFirst(v.Children, pathComponents(filename))
 
