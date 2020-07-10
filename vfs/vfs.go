@@ -2,6 +2,7 @@
 package vfs
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -59,6 +60,10 @@ func (v *VFS) Open(filename string) (http.File, error) {
 
 	v.mu.RLock()
 	defer v.mu.RUnlock()
+
+	if !filepath.IsAbs(filename) {
+		return nil, errors.New("vfs: path must be absolute")
+	}
 
 	filename = filepath.Clean(filename)
 
