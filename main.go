@@ -14,7 +14,7 @@ func main() {
 		srcDir      string
 	)
 
-	flag.StringVar(&packageName, "package-name", "essence",
+	flag.StringVar(&packageName, "package-name", "static_vfs",
 		"package name of generated file sytem")
 
 	flag.StringVar(&srcDir, "src-dir", "./static", "source directory")

@@ -3,7 +3,6 @@ package vfs
 
 import (
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -77,9 +76,7 @@ func (v *VFS) Open(filename string) (http.File, error) {
 		}
 	}
 
-	// if !file.isDir {
-	// file.Seek(0, io.SeekStart)
-	// }
+	file.Seek(0, io.SeekStart)
 
 	return file, nil
 }
@@ -128,6 +125,7 @@ func (f *VFile) Append(file *VFile) {
 
 // Close a file
 func (f *VFile) Close() error {
+	f.Seek(0, io.SeekStart)
 	return nil
 }
 
@@ -142,14 +140,10 @@ func (f *VFile) Readdir(count int) ([]os.FileInfo, error) {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
 
-	numFiles := len(f.Children)
+	res := make([]os.FileInfo, len(f.Children))
 
-	res := make([]os.FileInfo, numFiles)
-
-	i := 0
-	for _, file := range f.Children {
+	for i, file := range f.Children {
 		res[i], _ = file.Stat()
-		i++
 	}
 
 	return res, nil
@@ -163,18 +157,17 @@ func (f *VFile) Read(b []byte) (int, error) {
 
 	i := 0
 
-	// NOTE: resetting the pointer here could cause problems as it makes seek
-	//       pointless
-	f.At = 0
-
 	for f.At < int64(len(f.Data)) && i < len(b) {
 		b[i] = f.Data[f.At]
 		i++
 		f.At++
 	}
 
-	return i, nil
+	return i, io.EOF
 }
+
+var outRangeErr = errors.New("offset outside byte range")
+var invalidSeekType = errors.New("invalid seek constant")
 
 // Seek moves the file pointer to a particular byte offset
 func (f *VFile) Seek(offset int64, whence int) (int64, error) {
@@ -182,15 +175,28 @@ func (f *VFile) Seek(offset int64, whence int) (int64, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
+	end := int64(len(f.Data)) - 1
+
 	switch whence {
 	case io.SeekStart:
+		if offset < 0 || offset > end {
+			return 0, outRangeErr
+		}
 		f.At = offset
 	case io.SeekCurrent:
-		f.At += offset
+		newOffset := f.At + offset
+		if newOffset < 0 || newOffset > end {
+			return 0, outRangeErr
+		}
+		f.At = newOffset
 	case io.SeekEnd:
-		f.At = int64(len(f.Data)) + offset
+		newOffset := end - offset
+		if newOffset < 0 || newOffset > end {
+			return 0, outRangeErr
+		}
+		f.At = newOffset
 	default:
-		return 0, fmt.Errorf("invalid seek constant")
+		return 0, invalidSeekType
 	}
 
 	return f.At, nil
