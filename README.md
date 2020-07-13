@@ -24,19 +24,23 @@ The command line flags demonstrated here are the default values if they are not 
 
 Within your application you can then import the generated package (`static_vfs` in this example):
 
-    import (
+```go
+import (
 
-      ...
+  ...
 
-      vfs "github.com/username/project_name/static_vfs"
+  vfs "github.com/username/project_name/static_vfs"
 
-    )
+)
+```
 
 Adjust the module path as you need to for your project. It's assumed that the package alias `vfs` is being used within the rest of this README doc.
 
 Then refer to the virtual file system with
 
-    file, err := vfs.Open("/path/to/file")
+```go
+file, err := vfs.Open("/path/to/file")
+```
 
 When static content changes you must rerun the `go generate` command each time.
 
@@ -44,22 +48,28 @@ When static content changes you must rerun the `go generate` command each time.
 
 The virtual file system uses an extended interface beyond the `http.FileSystem` interface, which it embeds. These are
 
-    String(path string) (string, error)
-    Bytes(path string) ([]byte, error)
-    ParseFiles(paths ...string) (*template.Template, error)
-    ParseGlob(pattern string) (*template.Template, error)
-    ParseFilesWithFuncMap(template.FuncMap, paths ...string) (*template.Template, error)
-    ParseGlobWithFuncMap(template.FuncMap, pattern string) (*template.Template, error)
+```go
+String(path string) (string, error)
+Bytes(path string) ([]byte, error)
+ParseFiles(paths ...string) (*template.Template, error)
+ParseGlob(pattern string) (*template.Template, error)
+ParseFilesWithFuncMap(template.FuncMap, paths ...string) (*template.Template, error)
+ParseGlobWithFuncMap(template.FuncMap, pattern string) (*template.Template, error)
+```
 
 Example:
 
-    fileStr, err := vfs.String("/path/to/file")
+```go
+fileStr, err := vfs.String("/path/to/file")
+```
 
 This API is the public interface that wraps around a single instance of a virtual file system within the generated package code.
 
 In order to use this wrapper virtual file system directly you can acquire the instance with
 
-    fs := vfs.Instance()
+```go
+fs := vfs.Instance()
+```
 
 At which point you could then pass the instance to `http.FileServer()` for example since the virtual file server already implements the  `http.FileSystem` interface.
 
