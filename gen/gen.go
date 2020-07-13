@@ -37,6 +37,16 @@ func reEncodeJson(reader io.Reader) (*bytes.Buffer, error) {
 
 }
 
+var fnMap = map[string]interface{}{
+	"encodeBytes": func(bts []byte) string {
+		strBldr := new(strings.Builder)
+		for _, b := range bts {
+			strBldr.WriteString(fmt.Sprintf("\\x%02X", b))
+		}
+		return strBldr.String()
+	},
+}
+
 // vfsSpec is a utility structure containing necessary fields for write the file system to binary.
 type vfsSpec struct {
 	Package string
@@ -62,7 +72,12 @@ func writeFile(tmplStr, suffix string, spec *vfsSpec) error {
 
 	defer out.Close()
 
-	tmpl, err := template.New("").Parse(tmplStr)
+	tmpl, err := template.New("").Funcs(fnMap).Parse(tmplStr)
+	if err != nil {
+		return fmt.Errorf(errFmt, err)
+	}
+
+	tmpl, err = tmpl.Parse(publicInterfaceTmplStr)
 	if err != nil {
 		return fmt.Errorf(errFmt, err)
 	}
@@ -97,7 +112,7 @@ func buildTree(path string, vfileStack []*vfs.VFile) error {
 		nodePath := fmt.Sprintf("%s/%s", path, node.Name())
 
 		if node.IsDir() {
-			vDir := vfs.NewDir(node.Name(), node.ModTime())
+			vDir := vfs.NewFile(node)
 			// append virtual directory to last element in vfs
 			vfileStack[len(vfileStack)-1].Append(vDir)
 			// virtual directory becomes new last
@@ -125,7 +140,7 @@ func buildTree(path string, vfileStack []*vfs.VFile) error {
 			}
 		}
 
-		vfile := vfs.NewFile(node.Name(), node.ModTime(), buf.Bytes())
+		vfile := vfs.NewFile(node, buf.Bytes()...)
 		vfileStack[len(vfileStack)-1].Append(vfile)
 
 		fmt.Printf("ESSENCE: embedded file: %s/%s\n", path, node.Name())

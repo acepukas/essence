@@ -12,15 +12,19 @@ import (
 	"time"
 )
 
-// breadthFirst finds a file within the file system based on path components array.
-func breadthFirst(files []*VFile, components []string) *VFile {
+var sep = "/"
+var root = sep
+
+// breadthFirstSearch finds a file within the file system based on path
+// components array.
+func breadthFirstSearch(files []*VFile, components []string) *VFile {
 
 	for _, f := range files {
 		if f.Name == components[0] {
 			if len(components) == 1 {
 				return f
 			}
-			return breadthFirst(f.Children, components[1:])
+			return breadthFirstSearch(f.Children, components[1:])
 		}
 	}
 
@@ -30,13 +34,29 @@ func breadthFirst(files []*VFile, components []string) *VFile {
 
 // pathComponents splits a path into separate components as a string array.
 func pathComponents(p string) []string {
-	pathSep := "/"
-	start := []string{pathSep}
-	p = strings.Trim(p, pathSep)
+	start := []string{root}
+	p = strings.Trim(p, sep)
 	if p == "" {
 		return start
 	}
-	return append(start, strings.Split(p, pathSep)...)
+	return append(start, strings.Split(p, sep)...)
+}
+
+// find is just a convenient wrapper around breadthFirstSearch
+func find(v *VFS, filename string) (*VFile, error) {
+
+	file := breadthFirstSearch(v.Children, pathComponents(filename))
+
+	if file == nil {
+		return nil, &os.PathError{
+			Op:   "open",
+			Path: filename,
+			Err:  os.ErrNotExist,
+		}
+	}
+
+	return file, nil
+
 }
 
 // VFS is the structure that represents the virtual file system.
@@ -49,7 +69,7 @@ type VFS struct {
 func New() *VFS {
 	return &VFS{
 		Children: []*VFile{
-			NewDir("/", time.Now()),
+			NewFile(NewFileInfo(root, time.Now(), os.ModeDir|0755, 0)),
 		},
 	}
 }
@@ -65,15 +85,9 @@ func (v *VFS) Open(filename string) (http.File, error) {
 	}
 
 	filename = path.Clean(filename)
-
-	file := breadthFirst(v.Children, pathComponents(filename))
-
-	if file == nil {
-		return nil, &os.PathError{
-			Op:   "open",
-			Path: filename,
-			Err:  os.ErrNotExist,
-		}
+	file, err := find(v, filename)
+	if err != nil {
+		return nil, err
 	}
 
 	file.Seek(0, io.SeekStart)
@@ -87,38 +101,32 @@ type VFile struct {
 	Name     string
 	Data     []byte
 	ModTime  time.Time
-	IsDir    bool
+	Mode     os.FileMode
 	Children []*VFile
 	mu       sync.RWMutex
 }
 
-// NewDir creates a new virtual directory file instance
-func NewDir(name string, modTime time.Time) *VFile {
+// NewFile creates a new virtual file instance
+func NewFile(info os.FileInfo, data ...byte) *VFile {
 	return &VFile{
 		At:       0,
-		Name:     name,
-		Data:     []byte{},
-		ModTime:  modTime,
-		IsDir:    true,
+		Name:     info.Name(),
+		Data:     data,
+		ModTime:  info.ModTime(),
+		Mode:     info.Mode(),
 		Children: []*VFile{},
 	}
 }
 
-// NewFile creates a new virtual file instance
-func NewFile(name string, modTime time.Time, data []byte) *VFile {
-	return &VFile{
-		At:       0,
-		Name:     name,
-		Data:     data,
-		ModTime:  modTime,
-		IsDir:    false,
-		Children: []*VFile{},
-	}
+// IsDir is an intenal convenience used when building the file system tree and
+// rendering the file system template.
+func (f *VFile) IsDir() bool {
+	return f.Mode&os.ModeDir != 0
 }
 
 // Append a file to a directory. Will not append files to files, only dirs
 func (f *VFile) Append(file *VFile) {
-	if f.IsDir {
+	if f.IsDir() {
 		f.Children = append(f.Children, file)
 	}
 }
@@ -131,7 +139,10 @@ func (f *VFile) Close() error {
 
 // Stat retrieves info about a file
 func (f *VFile) Stat() (os.FileInfo, error) {
-	return &VFileInfo{f}, nil
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+	info := NewFileInfo(f.Name, f.ModTime, f.Mode, int64(len(f.Data)))
+	return info, nil
 }
 
 // Readdir retreives file info about all files within a directory
@@ -156,14 +167,19 @@ func (f *VFile) Read(b []byte) (int, error) {
 	defer f.mu.Unlock()
 
 	i := 0
+	l := int64(len(f.Data))
 
-	for f.At < int64(len(f.Data)) && i < len(b) {
+	for f.At < l && i < len(b) {
 		b[i] = f.Data[f.At]
 		i++
 		f.At++
 	}
 
-	return i, io.EOF
+	if f.At >= l {
+		return i, io.EOF
+	}
+
+	return i, nil
 }
 
 var outRangeErr = errors.New("offset outside byte range")
@@ -204,34 +220,35 @@ func (f *VFile) Seek(offset int64, whence int) (int64, error) {
 
 // VFileInfo structure represents virtual file information
 type VFileInfo struct {
-	file *VFile
+	FileName    string
+	FileModTime time.Time
+	FileMode    os.FileMode
+	FileSize    int64
+}
+
+func NewFileInfo(name string, modTime time.Time,
+	mode os.FileMode, size int64) *VFileInfo {
+	return &VFileInfo{
+		FileName:    name,
+		FileModTime: modTime,
+		FileMode:    mode,
+		FileSize:    size,
+	}
 }
 
 // Name retrieves file's name
 func (s *VFileInfo) Name() string {
-
-	s.file.mu.RLock()
-	defer s.file.mu.RUnlock()
-
-	return s.file.Name
+	return s.FileName
 }
 
 // ModTime retrieves file's last modification time
 func (s *VFileInfo) ModTime() time.Time {
-
-	s.file.mu.RLock()
-	defer s.file.mu.RUnlock()
-
-	return s.file.ModTime
+	return s.FileModTime
 }
 
 // IsDir returns true if file node is a directory
 func (s *VFileInfo) IsDir() bool {
-
-	s.file.mu.RLock()
-	defer s.file.mu.RUnlock()
-
-	return s.file.IsDir
+	return s.FileMode&os.ModeDir != 0
 }
 
 // Sys simply retuns nil
@@ -241,19 +258,10 @@ func (s *VFileInfo) Sys() interface{} {
 
 // Size returns the interger byte size of file
 func (s *VFileInfo) Size() int64 {
-
-	s.file.mu.RLock()
-	defer s.file.mu.RUnlock()
-
-	size := int64(len(s.file.Data))
-
-	return size
+	return s.FileSize
 }
 
 // Mode retrieves file's unix permissions flags
 func (s *VFileInfo) Mode() os.FileMode {
-	if s.IsDir() {
-		return os.FileMode(0755)
-	}
-	return os.FileMode(0644)
+	return s.FileMode
 }
