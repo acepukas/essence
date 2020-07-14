@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"go/format"
 	"io"
 	"io/ioutil"
 	"os"
@@ -69,7 +70,6 @@ func writeFile(tmplStr, suffix string, spec *vfsSpec) error {
 	if err != nil {
 		return fmt.Errorf(errFmt, err)
 	}
-
 	defer out.Close()
 
 	tmpl, err := template.New("").Funcs(fnMap).Parse(tmplStr)
@@ -82,8 +82,18 @@ func writeFile(tmplStr, suffix string, spec *vfsSpec) error {
 		return fmt.Errorf(errFmt, err)
 	}
 
-	err = tmpl.Execute(out, spec)
+	buf := new(bytes.Buffer)
+	err = tmpl.Execute(buf, spec)
 	if err != nil {
+		return fmt.Errorf(errFmt, err)
+	}
+
+	data, err := format.Source(buf.Bytes())
+	if err != nil {
+		return fmt.Errorf(errFmt, err)
+	}
+
+	if err := ioutil.WriteFile(filename, data, os.FileMode(0644)); err != nil {
 		return fmt.Errorf(errFmt, err)
 	}
 
