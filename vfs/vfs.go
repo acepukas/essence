@@ -163,8 +163,8 @@ func (f *VFile) Readdir(count int) ([]os.FileInfo, error) {
 // Read writes file data to a byte array
 func (f *VFile) Read(b []byte) (int, error) {
 
-	f.mu.Lock()
-	defer f.mu.Unlock()
+	f.mu.RLock()
+	defer f.mu.RUnlock()
 
 	i := 0
 	l := int64(len(f.Data))
